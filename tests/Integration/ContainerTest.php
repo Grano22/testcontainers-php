@@ -4,16 +4,29 @@ declare(strict_types=1);
 
 namespace Testcontainers\Tests\Integration;
 
+use PDO;
 use PHPUnit\Framework\TestCase;
 use Predis\Client;
+use Testcontainers\Container\Container;
 use Testcontainers\Container\MariaDBContainer;
 use Testcontainers\Container\MySQLContainer;
 use Testcontainers\Container\OpenSearchContainer;
 use Testcontainers\Container\PostgresContainer;
+use Testcontainers\Container\RabbitMqContainer;
 use Testcontainers\Container\RedisContainer;
+use Testcontainers\Container\TestContainersRuntime;
+use Testcontainers\Image\ContainerImage;
 
 class ContainerTest extends TestCase
 {
+    private readonly TestContainersRuntime $runtime;
+
+    protected function setUp(): void
+    {
+        $this->runtime = TestContainersRuntime::deref();
+        $this->runtime->enableDebug();
+    }
+
     public function testMySQL(): void
     {
         $container = MySQLContainer::make();
@@ -102,24 +115,46 @@ class ContainerTest extends TestCase
 
     public function testPostgreSQLContainer(): void
     {
-        $container = PostgresContainer::make('latest', 'test')
+        self::assertTrue(PostgresContainer::defaultImage()->exists());
+        $container = PostgresContainer::make('test')
             ->withPostgresUser('test')
             ->withPostgresDatabase('foo')
+            ->withNetwork('host')
             ->run();
 
+        echo $container->getAddress();
 
-        $pdo = new \PDO(
+        $pdo = new PDO(
             sprintf('pgsql:host=%s;port=5432;dbname=foo', $container->getAddress()),
             'test',
             'test',
+            [
+                PDO::ATTR_TIMEOUT => 0,
+                PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
+            ]
         );
 
         $query = $pdo->query('SELECT datname FROM pg_database');
 
-        $this->assertInstanceOf(\PDOStatement::class, $query);
+        $this->assertInstanceOf(PDOStatement::class, $query);
 
-        $databases = $query->fetchAll(\PDO::FETCH_COLUMN);
+        $databases = $query->fetchAll(PDO::FETCH_COLUMN);
 
         $this->assertContains('foo', $databases);
+    }
+
+    public function testRabbitMqContainer(): void
+    {
+        $container = RabbitMqContainer::make(Container::IMAGE_LATEST)
+            ->withRabbitMqUser('admin', 'admin')
+            ->withRabbitMQVhost('/')
+            ->run()
+        ;
+
+        $brokerHost = '127.0.0.1';
+        $brokerPort = 5672;
+        $connection = stream_socket_client("tcp://{$brokerHost}:{$brokerPort}", $errno, $errstr, 10);
+
+
     }
 }

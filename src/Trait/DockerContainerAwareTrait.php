@@ -16,8 +16,6 @@ use UnexpectedValueException;
 trait DockerContainerAwareTrait
 {
     /**
-     * @param string $containerId
-     * @param string|null $networkName
      * @param ContainerInspect|null $inspectedData
      * @return string
      *

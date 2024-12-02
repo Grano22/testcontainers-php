@@ -1,0 +1,7 @@
+services:
+  testcontainers-php-dev:
+    build:
+      dockerfile: ./.docker/testcontainers-php/Dockerfile
+      target: testcontainers-php
+    volumes:
+      - './:/app'

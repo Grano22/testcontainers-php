@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Testcontainers\Container;
 
 use Symfony\Component\Process\Process;
+use Testcontainers\Actions\DockerActions;
 use Testcontainers\Exception\ContainerNotReadyException;
+use Testcontainers\Image\ContainerImage;
 use Testcontainers\Registry;
 use Testcontainers\Trait\DockerContainerAwareTrait;
 use Testcontainers\Wait\WaitForNothing;
@@ -20,6 +22,8 @@ use Testcontainers\Wait\WaitInterface;
 class Container
 {
     use DockerContainerAwareTrait;
+
+    public const IMAGE_LATEST = 'latest';
 
     private string $id;
 
@@ -38,6 +42,7 @@ class Container
     private ?string $network = null;
     private ?string $healthCheckCommand = null;
     private int $healthCheckIntervalInMS;
+    //private
 
     /**
      * @var array<string>
@@ -59,8 +64,16 @@ class Container
      */
     private array $ports = [];
 
+    private TestContainersRuntime $runtime;
+
+    public static function defaultImage(): ContainerImage
+    {
+        return ContainerImage::as('busybox', ContainerImage::LATEST);
+    }
+
     protected function __construct(private string $image)
     {
+        $this->runtime = TestContainersRuntime::deref();
         $this->wait = new WaitForNothing();
     }
 
@@ -209,16 +222,31 @@ class Container
             array_push($params, ...$this->cmd);
         }
 
+        $this->runtime->actions->emit(
+            DockerActions::PREPARE_DOCKER_RUN_COMMAND,
+            [
+                'args' => $params,
+            ]
+        );
+
         $this->process = new Process($params);
         $this->process->mustRun();
+        //var_export($this->process->getOutput());
 
         $this->inspectedData = self::dockerContainerInspect($this->id);
 
+        $this->runtime->actions->emit(
+            DockerActions::FETCHED_CONTAINER_DETAILS,
+            [
+                'inspect_data' => $this->inspectedData
+            ]
+        );
+
         Registry::add($this);
 
-        if ($wait) {
-            $this->wait();
-        }
+//        if ($wait) {
+//            $this->wait();
+//        }
 
         return $this;
     }
